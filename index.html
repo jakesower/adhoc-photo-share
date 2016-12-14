@@ -1,0 +1,23 @@
+<html>
+  <head>
+    <title>Test</title>
+  </head>
+
+  <body>
+    <div id="main"></main>
+  </body>
+
+  <script type="text/javascript" src="./bundle/photo-share.js"></script>
+  <script type="text/javascript">
+    var connection = {
+      send: (msg) => {
+        console.log("MESSAGE SENT");
+        console.log(msg)
+        console.log('is blob? ' + (msg instanceof ArrayBuffer))
+        connection.onmessage(msg, {binary: true});
+      }
+    }
+
+    window.adhoc.widget( connection, document.body );
+  </script>
+</html>
