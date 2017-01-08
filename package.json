@@ -16,6 +16,7 @@
     "watchify": "^3.7.0"
   },
   "dependencies": {
-    "image-type": "^2.1.0"
+    "image-type": "^2.1.0",
+    "js-sha256": "^0.3.2"
   }
 }

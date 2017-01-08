@@ -1,24 +1,32 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 (function (Buffer){
-
 var dom = require('./src/dom');
+
 var mainTemplate = Buffer("PG1haW4+CiAgPGZvcm0gaWQ9InVwbG9hZC1mb3JtIiBhY3Rpb249Ii91cGxvYWQiIG1ldGhvZD0iUE9TVCIgZW5jdHlwZT0ibXVsdGlwYXJ0L2Zvcm0tZGF0YSI+CiAgICA8aW5wdXQgaWQ9InVwbG9hZCIgdHlwZT0iZmlsZSIgbmFtZT0icGljdHVyZXNbXSIgbXVsdGlwbGU+CiAgICA8YnIvPgogICAgPGltZyBpZD0icHJldmlldyI+PC9kaXY+CiAgPC9mb3JtPgoKICA8dGVtcGxhdGUgaWQ9InBpY3R1cmUtdGVtcGxhdGUiPgogICAgPGZpZ3VyZT4KICAgICAgPGltZz4KICAgICAgPGZpZ2NhcHRpb24+PC9maWdjYXB0aW9uPgogICAgPC9maWd1cmU+CiAgPC90ZW1wbGF0ZT4KCiAgPGRpdiBpZD0icGljdHVyZS1saXN0Ij4KICA8L2Rpdj4KPC9tYWluPgo=","base64");
 
 window.adhoc = window.adhoc || {};
 window.adhoc.widget = function( connection, rootElement ) {
   var state = [];
+  var inProgress = {};
 
-  connection.onmessage = function( message, { binary }) {
-    if( binary ) {
-      state.push( message );
-      dom.append( message );
+  connection.onmessage = function( message ) {
+    console.log( message );
+    data = JSON.parse( message.data );
+
+    if( !( data.id in inProgress )) inProgress[ data.id ] = [];
+    inProgress[ data.id ].push( data.chunk );
+
+    if( data.last ) {
+      // state.push( message.data );
+      dom.append( inProgress[ data.id ].join('') );
+      delete inProgress[ data.id ];
     }
-    else if( message.type === 'state' ) {
-      connection.send({ type: state, data: state });
-    }
-    else {
-      console.log( 'Unrecognized message: ' + message );
-    }
+    // else if( message.type === 'state' ) {
+    //   connection.send({ type: state, data: state });
+    // }
+    // else {
+    //   console.log( 'Unrecognized message: ' + message );
+    // }
   }
 
 
@@ -34,7 +42,7 @@ window.adhoc.widget = function( connection, rootElement ) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"./src/dom":6,"buffer":3}],2:[function(require,module,exports){
+},{"./src/dom":8,"buffer":3}],2:[function(require,module,exports){
 'use strict'
 
 exports.byteLength = byteLength
@@ -2037,8 +2045,426 @@ module.exports = Array.isArray || function (arr) {
 };
 
 },{}],6:[function(require,module,exports){
+(function (process,global){
+/**
+ * [js-sha256]{@link https://github.com/emn178/js-sha256}
+ *
+ * @version 0.3.2
+ * @author Chen, Yi-Cyuan [emn178@gmail.com]
+ * @copyright Chen, Yi-Cyuan 2014-2016
+ * @license MIT
+ */
+(function (root) {
+  'use strict';
 
-// var utils = require('./utils');
+  var NODE_JS = typeof process == 'object' && process.versions && process.versions.node;
+  if (NODE_JS) {
+    root = global;
+  }
+  var COMMON_JS = !root.JS_SHA256_TEST && typeof module == 'object' && module.exports;
+  var HEX_CHARS = '0123456789abcdef'.split('');
+  var EXTRA = [-2147483648, 8388608, 32768, 128];
+  var SHIFT = [24, 16, 8, 0];
+  var K =[0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+          0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+          0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+          0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+          0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+          0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+          0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+          0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2];
+
+  var blocks = [];
+
+  var sha224 = function (message) {
+    return sha256(message, true);
+  };
+
+  var sha256 = function (message, is224) {
+    var notString = typeof message != 'string';
+    if (notString && message.constructor == root.ArrayBuffer) {
+      message = new Uint8Array(message);
+    }
+
+    var h0, h1, h2, h3, h4, h5, h6, h7, block, code, first = true, end = false,
+        i, j, index = 0, start = 0, bytes = 0, length = message.length,
+        s0, s1, maj, t1, t2, ch, ab, da, cd, bc;
+
+    if (is224) {
+      h0 = 0xc1059ed8;
+      h1 = 0x367cd507;
+      h2 = 0x3070dd17;
+      h3 = 0xf70e5939;
+      h4 = 0xffc00b31;
+      h5 = 0x68581511;
+      h6 = 0x64f98fa7;
+      h7 = 0xbefa4fa4;
+    } else { // 256
+      h0 = 0x6a09e667;
+      h1 = 0xbb67ae85;
+      h2 = 0x3c6ef372;
+      h3 = 0xa54ff53a;
+      h4 = 0x510e527f;
+      h5 = 0x9b05688c;
+      h6 = 0x1f83d9ab;
+      h7 = 0x5be0cd19;
+    }
+    block = 0;
+    do {
+      blocks[0] = block;
+      blocks[16] = blocks[1] = blocks[2] = blocks[3] =
+      blocks[4] = blocks[5] = blocks[6] = blocks[7] =
+      blocks[8] = blocks[9] = blocks[10] = blocks[11] =
+      blocks[12] = blocks[13] = blocks[14] = blocks[15] = 0;
+      if (notString) {
+        for (i = start;index < length && i < 64;++index) {
+          blocks[i >> 2] |= message[index] << SHIFT[i++ & 3];
+        }
+      } else {
+        for (i = start;index < length && i < 64;++index) {
+          code = message.charCodeAt(index);
+          if (code < 0x80) {
+            blocks[i >> 2] |= code << SHIFT[i++ & 3];
+          } else if (code < 0x800) {
+            blocks[i >> 2] |= (0xc0 | (code >> 6)) << SHIFT[i++ & 3];
+            blocks[i >> 2] |= (0x80 | (code & 0x3f)) << SHIFT[i++ & 3];
+          } else if (code < 0xd800 || code >= 0xe000) {
+            blocks[i >> 2] |= (0xe0 | (code >> 12)) << SHIFT[i++ & 3];
+            blocks[i >> 2] |= (0x80 | ((code >> 6) & 0x3f)) << SHIFT[i++ & 3];
+            blocks[i >> 2] |= (0x80 | (code & 0x3f)) << SHIFT[i++ & 3];
+          } else {
+            code = 0x10000 + (((code & 0x3ff) << 10) | (message.charCodeAt(++index) & 0x3ff));
+            blocks[i >> 2] |= (0xf0 | (code >> 18)) << SHIFT[i++ & 3];
+            blocks[i >> 2] |= (0x80 | ((code >> 12) & 0x3f)) << SHIFT[i++ & 3];
+            blocks[i >> 2] |= (0x80 | ((code >> 6) & 0x3f)) << SHIFT[i++ & 3];
+            blocks[i >> 2] |= (0x80 | (code & 0x3f)) << SHIFT[i++ & 3];
+          }
+        }
+      }
+      bytes += i - start;
+      start = i - 64;
+      if (index == length) {
+        blocks[i >> 2] |= EXTRA[i & 3];
+        ++index;
+      }
+      block = blocks[16];
+      if (index > length && i < 56) {
+        blocks[15] = bytes << 3;
+        end = true;
+      }
+
+      var a = h0, b = h1, c = h2, d = h3, e = h4, f = h5, g = h6, h = h7;
+      for (j = 16;j < 64;++j) {
+        // rightrotate
+        t1 = blocks[j - 15];
+        s0 = ((t1 >>> 7) | (t1 << 25)) ^ ((t1 >>> 18) | (t1 << 14)) ^ (t1 >>> 3);
+        t1 = blocks[j - 2];
+        s1 = ((t1 >>> 17) | (t1 << 15)) ^ ((t1 >>> 19) | (t1 << 13)) ^ (t1 >>> 10);
+        blocks[j] = blocks[j - 16] + s0 + blocks[j - 7] + s1 << 0;
+      }
+
+      bc = b & c;
+      for (j = 0;j < 64;j += 4) {
+        if (first) {
+          if (is224) {
+            ab = 300032;
+            t1 = blocks[0] - 1413257819;
+            h = t1 - 150054599 << 0;
+            d = t1 + 24177077 << 0;
+          } else {
+            ab = 704751109;
+            t1 = blocks[0] - 210244248;
+            h = t1 - 1521486534 << 0;
+            d = t1 + 143694565 << 0;
+          }
+          first = false;
+        } else {
+          s0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+          s1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+          ab = a & b;
+          maj = ab ^ (a & c) ^ bc;
+          ch = (e & f) ^ (~e & g);
+          t1 = h + s1 + ch + K[j] + blocks[j];
+          t2 = s0 + maj;
+          h = d + t1 << 0;
+          d = t1 + t2 << 0;
+        }
+        s0 = ((d >>> 2) | (d << 30)) ^ ((d >>> 13) | (d << 19)) ^ ((d >>> 22) | (d << 10));
+        s1 = ((h >>> 6) | (h << 26)) ^ ((h >>> 11) | (h << 21)) ^ ((h >>> 25) | (h << 7));
+        da = d & a;
+        maj = da ^ (d & b) ^ ab;
+        ch = (h & e) ^ (~h & f);
+        t1 = g + s1 + ch + K[j + 1] + blocks[j + 1];
+        t2 = s0 + maj;
+        g = c + t1 << 0;
+        c = t1 + t2 << 0;
+        s0 = ((c >>> 2) | (c << 30)) ^ ((c >>> 13) | (c << 19)) ^ ((c >>> 22) | (c << 10));
+        s1 = ((g >>> 6) | (g << 26)) ^ ((g >>> 11) | (g << 21)) ^ ((g >>> 25) | (g << 7));
+        cd = c & d;
+        maj = cd ^ (c & a) ^ da;
+        ch = (g & h) ^ (~g & e);
+        t1 = f + s1 + ch + K[j + 2] + blocks[j + 2];
+        t2 = s0 + maj;
+        f = b + t1 << 0;
+        b = t1 + t2 << 0;
+        s0 = ((b >>> 2) | (b << 30)) ^ ((b >>> 13) | (b << 19)) ^ ((b >>> 22) | (b << 10));
+        s1 = ((f >>> 6) | (f << 26)) ^ ((f >>> 11) | (f << 21)) ^ ((f >>> 25) | (f << 7));
+        bc = b & c;
+        maj = bc ^ (b & d) ^ cd;
+        ch = (f & g) ^ (~f & h);
+        t1 = e + s1 + ch + K[j + 3] + blocks[j + 3];
+        t2 = s0 + maj;
+        e = a + t1 << 0;
+        a = t1 + t2 << 0;
+      }
+
+      h0 = h0 + a << 0;
+      h1 = h1 + b << 0;
+      h2 = h2 + c << 0;
+      h3 = h3 + d << 0;
+      h4 = h4 + e << 0;
+      h5 = h5 + f << 0;
+      h6 = h6 + g << 0;
+      h7 = h7 + h << 0;
+    } while (!end);
+
+    var hex = HEX_CHARS[(h0 >> 28) & 0x0F] + HEX_CHARS[(h0 >> 24) & 0x0F] +
+              HEX_CHARS[(h0 >> 20) & 0x0F] + HEX_CHARS[(h0 >> 16) & 0x0F] +
+              HEX_CHARS[(h0 >> 12) & 0x0F] + HEX_CHARS[(h0 >> 8) & 0x0F] +
+              HEX_CHARS[(h0 >> 4) & 0x0F] + HEX_CHARS[h0 & 0x0F] +
+              HEX_CHARS[(h1 >> 28) & 0x0F] + HEX_CHARS[(h1 >> 24) & 0x0F] +
+              HEX_CHARS[(h1 >> 20) & 0x0F] + HEX_CHARS[(h1 >> 16) & 0x0F] +
+              HEX_CHARS[(h1 >> 12) & 0x0F] + HEX_CHARS[(h1 >> 8) & 0x0F] +
+              HEX_CHARS[(h1 >> 4) & 0x0F] + HEX_CHARS[h1 & 0x0F] +
+              HEX_CHARS[(h2 >> 28) & 0x0F] + HEX_CHARS[(h2 >> 24) & 0x0F] +
+              HEX_CHARS[(h2 >> 20) & 0x0F] + HEX_CHARS[(h2 >> 16) & 0x0F] +
+              HEX_CHARS[(h2 >> 12) & 0x0F] + HEX_CHARS[(h2 >> 8) & 0x0F] +
+              HEX_CHARS[(h2 >> 4) & 0x0F] + HEX_CHARS[h2 & 0x0F] +
+              HEX_CHARS[(h3 >> 28) & 0x0F] + HEX_CHARS[(h3 >> 24) & 0x0F] +
+              HEX_CHARS[(h3 >> 20) & 0x0F] + HEX_CHARS[(h3 >> 16) & 0x0F] +
+              HEX_CHARS[(h3 >> 12) & 0x0F] + HEX_CHARS[(h3 >> 8) & 0x0F] +
+              HEX_CHARS[(h3 >> 4) & 0x0F] + HEX_CHARS[h3 & 0x0F] +
+              HEX_CHARS[(h4 >> 28) & 0x0F] + HEX_CHARS[(h4 >> 24) & 0x0F] +
+              HEX_CHARS[(h4 >> 20) & 0x0F] + HEX_CHARS[(h4 >> 16) & 0x0F] +
+              HEX_CHARS[(h4 >> 12) & 0x0F] + HEX_CHARS[(h4 >> 8) & 0x0F] +
+              HEX_CHARS[(h4 >> 4) & 0x0F] + HEX_CHARS[h4 & 0x0F] +
+              HEX_CHARS[(h5 >> 28) & 0x0F] + HEX_CHARS[(h5 >> 24) & 0x0F] +
+              HEX_CHARS[(h5 >> 20) & 0x0F] + HEX_CHARS[(h5 >> 16) & 0x0F] +
+              HEX_CHARS[(h5 >> 12) & 0x0F] + HEX_CHARS[(h5 >> 8) & 0x0F] +
+              HEX_CHARS[(h5 >> 4) & 0x0F] + HEX_CHARS[h5 & 0x0F] +
+              HEX_CHARS[(h6 >> 28) & 0x0F] + HEX_CHARS[(h6 >> 24) & 0x0F] +
+              HEX_CHARS[(h6 >> 20) & 0x0F] + HEX_CHARS[(h6 >> 16) & 0x0F] +
+              HEX_CHARS[(h6 >> 12) & 0x0F] + HEX_CHARS[(h6 >> 8) & 0x0F] +
+              HEX_CHARS[(h6 >> 4) & 0x0F] + HEX_CHARS[h6 & 0x0F];
+    if (!is224) {
+      hex += HEX_CHARS[(h7 >> 28) & 0x0F] + HEX_CHARS[(h7 >> 24) & 0x0F] +
+             HEX_CHARS[(h7 >> 20) & 0x0F] + HEX_CHARS[(h7 >> 16) & 0x0F] +
+             HEX_CHARS[(h7 >> 12) & 0x0F] + HEX_CHARS[(h7 >> 8) & 0x0F] +
+             HEX_CHARS[(h7 >> 4) & 0x0F] + HEX_CHARS[h7 & 0x0F];
+    }
+    return hex;
+  };
+  
+  if (COMMON_JS) {
+    sha256.sha256 = sha256;
+    sha256.sha224 = sha224;
+    module.exports = sha256;
+  } else if (root) {
+    root.sha256 = sha256;
+    root.sha224 = sha224;
+  }
+}(this));
+
+}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"_process":7}],7:[function(require,module,exports){
+// shim for using process in browser
+var process = module.exports = {};
+
+// cached from whatever global is present so that test runners that stub it
+// don't break things.  But we need to wrap it in a try catch in case it is
+// wrapped in strict mode code which doesn't define any globals.  It's inside a
+// function because try/catches deoptimize in certain engines.
+
+var cachedSetTimeout;
+var cachedClearTimeout;
+
+function defaultSetTimout() {
+    throw new Error('setTimeout has not been defined');
+}
+function defaultClearTimeout () {
+    throw new Error('clearTimeout has not been defined');
+}
+(function () {
+    try {
+        if (typeof setTimeout === 'function') {
+            cachedSetTimeout = setTimeout;
+        } else {
+            cachedSetTimeout = defaultSetTimout;
+        }
+    } catch (e) {
+        cachedSetTimeout = defaultSetTimout;
+    }
+    try {
+        if (typeof clearTimeout === 'function') {
+            cachedClearTimeout = clearTimeout;
+        } else {
+            cachedClearTimeout = defaultClearTimeout;
+        }
+    } catch (e) {
+        cachedClearTimeout = defaultClearTimeout;
+    }
+} ())
+function runTimeout(fun) {
+    if (cachedSetTimeout === setTimeout) {
+        //normal enviroments in sane situations
+        return setTimeout(fun, 0);
+    }
+    // if setTimeout wasn't available but was latter defined
+    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
+        cachedSetTimeout = setTimeout;
+        return setTimeout(fun, 0);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedSetTimeout(fun, 0);
+    } catch(e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
+            return cachedSetTimeout.call(null, fun, 0);
+        } catch(e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
+            return cachedSetTimeout.call(this, fun, 0);
+        }
+    }
+
+
+}
+function runClearTimeout(marker) {
+    if (cachedClearTimeout === clearTimeout) {
+        //normal enviroments in sane situations
+        return clearTimeout(marker);
+    }
+    // if clearTimeout wasn't available but was latter defined
+    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
+        cachedClearTimeout = clearTimeout;
+        return clearTimeout(marker);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedClearTimeout(marker);
+    } catch (e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
+            return cachedClearTimeout.call(null, marker);
+        } catch (e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
+            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
+            return cachedClearTimeout.call(this, marker);
+        }
+    }
+
+
+
+}
+var queue = [];
+var draining = false;
+var currentQueue;
+var queueIndex = -1;
+
+function cleanUpNextTick() {
+    if (!draining || !currentQueue) {
+        return;
+    }
+    draining = false;
+    if (currentQueue.length) {
+        queue = currentQueue.concat(queue);
+    } else {
+        queueIndex = -1;
+    }
+    if (queue.length) {
+        drainQueue();
+    }
+}
+
+function drainQueue() {
+    if (draining) {
+        return;
+    }
+    var timeout = runTimeout(cleanUpNextTick);
+    draining = true;
+
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        while (++queueIndex < len) {
+            if (currentQueue) {
+                currentQueue[queueIndex].run();
+            }
+        }
+        queueIndex = -1;
+        len = queue.length;
+    }
+    currentQueue = null;
+    draining = false;
+    runClearTimeout(timeout);
+}
+
+process.nextTick = function (fun) {
+    var args = new Array(arguments.length - 1);
+    if (arguments.length > 1) {
+        for (var i = 1; i < arguments.length; i++) {
+            args[i - 1] = arguments[i];
+        }
+    }
+    queue.push(new Item(fun, args));
+    if (queue.length === 1 && !draining) {
+        runTimeout(drainQueue);
+    }
+};
+
+// v8 likes predictible objects
+function Item(fun, array) {
+    this.fun = fun;
+    this.array = array;
+}
+Item.prototype.run = function () {
+    this.fun.apply(null, this.array);
+};
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
+process.versions = {};
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+};
+
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+process.umask = function() { return 0; };
+
+},{}],8:[function(require,module,exports){
+config = {
+  chunkSize: 1000
+}
+
+
+var sha256 = require('js-sha256');
 
 module.exports = {
   append: append,
@@ -2050,9 +2476,34 @@ function init( connection ) {
   var uploader = document.getElementById('upload');
   var reader = new FileReader();
 
+  var sendInChunks = function( data ) {
+    console.log( data.length )
+    let cursor = 0;
+    let id = sha256( data );
+
+    while( data.length > ( config.chunkSize * ( cursor + 1 ))) {
+      const startOffset = config.chunkSize * cursor;
+      const endOffset = (( config.chunkSize * ( cursor + 1 )));
+
+      connection.send( JSON.stringify({
+        id: id,
+        chunk: data.slice( startOffset, endOffset ),
+        last: false
+      }));
+
+      cursor += 1;
+    }
+
+    connection.send( JSON.stringify({
+      id: id,
+      chunk: data.slice( config.chunkSize * cursor ),
+      last: true
+    }));
+  }
+
   reader.onloadend = function() {
     preview.src = reader.result;
-    connection.send( reader.result );
+    sendInChunks( reader.result );
   }
 
   uploader.addEventListener('change', function() {
@@ -2069,10 +2520,11 @@ function init( connection ) {
 function append( message ) {
   var list = document.getElementById('picture-list'),
       template = document.getElementById('picture-template').content,
-      img = template.querySelector('img');
+      clone = document.importNode( template, true ),
+      img = clone.querySelector('img');
 
   img.setAttribute( 'src', message );
-  list.appendChild( template );
+  list.appendChild( clone );
 }
 
-},{}]},{},[1]);
+},{"js-sha256":6}]},{},[1]);
