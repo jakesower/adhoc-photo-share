@@ -12,9 +12,6 @@
     var connection = {
       send: (msg) => {
         console.log("MESSAGE SENT");
-        console.log(msg)
-        console.log('is blob? ' + (msg instanceof ArrayBuffer))
-        connection.onmessage(msg, {binary: true});
       }
     }
 

@@ -5,18 +5,15 @@ config = {
 var fs = require('fs');
 var sha256 = require('js-sha256');
 
+var uploader = require('./uploader');
+
 module.exports = {
   append: append,
   init: init
 }
 
 function init( connection ) {
-  var preview = document.getElementById('preview');
-  var uploader = document.getElementById('upload');
-  var reader = new FileReader();
-
   var sendInChunks = function( data ) {
-    console.log( data.length )
     let cursor = 0;
     let id = sha256( data );
 
@@ -40,20 +37,7 @@ function init( connection ) {
     }));
   }
 
-  reader.onloadend = function() {
-    preview.src = reader.result;
-    sendInChunks( reader.result );
-  }
-
-  uploader.addEventListener('change', function() {
-    var file = uploader.files[0];
-    if(file) {
-      reader.readAsDataURL(file);
-    }
-    else {
-      preview.src = '';
-    }
-  });
+  uploader.init();
 }
 
 function append( message ) {

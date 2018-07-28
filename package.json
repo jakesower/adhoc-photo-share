@@ -7,16 +7,21 @@
   "license": "MIT",
   "scripts": {
     "build": "browserify ./main.js -o bundle/photo-share.js -t brfs -v",
+    "watch-sass": "mkdirp bundle/styles && node-sass -wr styles -o bundle/styles",
     "watch": "watchify ./main.js -o bundle/photo-share.js -t brfs -v",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "devDependencies": {
     "brfs": "^1.4.3",
     "browserify": "^13.1.1",
+    "mkdirp": "^0.5.1",
+    "node-sass": "^4.5.0",
     "watchify": "^3.7.0"
   },
   "dependencies": {
     "image-type": "^2.1.0",
-    "js-sha256": "^0.3.2"
+    "js-sha256": "^0.3.2",
+    "ramda": "^0.23.0",
+    "redom": "^1.16.0"
   }
 }

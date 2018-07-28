@@ -1,10 +1,16 @@
 var dom = require('./src/dom');
 var fs = require('fs');
-var mainTemplate = fs.readFileSync(__dirname + '/src/main.html');
+var redom = require('redom');
+
+var mainTemplate = fs.readFileSync(__dirname + '/src/main.html', {encoding: 'utf8'});
+var styles = fs.readFileSync(__dirname + '/bundle/styles/index.css', {encoding: 'utf8'});
 
 window.adhoc = window.adhoc || {};
 window.adhoc.widget = function( connection, rootElement ) {
-  var state = [];
+  var state = {
+    images: [],
+    isSelecting: true
+  };
   var inProgress = {};
 
   connection.onmessage = function( message ) {
@@ -34,7 +40,8 @@ window.adhoc.widget = function( connection, rootElement ) {
     });
   }
 
-
   rootElement.innerHTML = mainTemplate;
+  document.getElementById('adhoc-photo-share-styles').innerHTML = styles;
+
   dom.init( connection );
 }
